@@ -33,6 +33,17 @@ std::vector<std::vector<double> > read_from_file(const std::string &name) {
     return data;
 }
 
+void write_to_file(const std::vector<std::vector<double> > &data, const std::string &name) {
+    std::ofstream outFile(name);
+    if (!outFile) {
+        return;
+    }
+    for (const auto &elem: data) {
+        outFile << elem[0] << ' ' << elem[1] << ' ' << elem[2] << ' ' << elem[3] << std::endl;
+    }
+    outFile.close();
+}
+
 
 std::vector<std::vector<double> > mid_point(const std::vector<std::vector<double> > &data, const int p, int coord) {
     std::vector<int> index(p);
@@ -99,23 +110,51 @@ std::vector<std::vector<double> > LR(const std::vector<std::vector<double> > &l,
     return finale;
 }
 
+std::vector<std::vector<double> > LRT(const std::vector<std::vector<double> > &l, const std::vector<std::vector<double> > &r, const std::vector<std::vector<double> > &t,
+                                      const std::vector<std::vector<double> > &f_real, const std::vector<std::vector<double> > &f_imag) {
+    std::vector<std::vector<double> > finale;
+    for (int i = 0; i < l.size(); ++i) {
+        double g_real = 1, g_imag = 1, s22_r = 0, s22_i = 0, s1221_r = 0, s1221_i = 0;
+        for (int j = 0; j < 4; ++j) {
+            double s = sqrt((r[i][1] - applySpline(l[i][0], f_real)) * (1 - s22_r * g_real) / ((r[i][8] - applySpline(l[i][0], f_imag)) * (1 - s22_i * g_imag)));
+            s22_r = s * (t[i][8] - applySpline(l[i][0], f_imag)) / t[i][6];
+            s22_i = 1 / s * (t[i][1] - applySpline(l[i][0], f_real)) / t[i][3];
+            s1221_r = t[i][3] * s * (1 - s22_r * s22_i);
+            s1221_i = t[i][6] * (1 / s) * (1 - s22_r * s22_i);
+            g_real = (r[i][1] - applySpline(l[i][0], f_real)) / (r[i][1] * s22_r - applySpline(l[i][0], f_real) * s22_r + s1221_r);
+            g_imag = (r[i][8] - applySpline(l[i][0], f_imag)) / (r[i][8] * s22_i - applySpline(l[i][0], f_imag) * s22_i + s1221_i);
+        }
+        finale.push_back({s22_r, s22_i, s1221_r, s1221_i});
+    }
+    return finale;
+}
+
+std::vector<std::vector<double> > express(const std::vector<std::vector<double> > &l, const std::vector<std::vector<double> > &f_real, const std::vector<std::vector<double> > &f_imag) {
+    std::vector<std::vector<double> > finale;
+    for (int i = 0; i < l.size(); ++i) {
+        double s22_r = 0, s22_i = 0, s1221_r = 0, s1221_i = 0;
+        double s = sqrt(1);
+        s22_r = s * (l[i][8] - applySpline(l[i][0], f_imag)) / l[i][6];
+        s22_i = 1 / s * (l[i][1] - applySpline(l[i][0], f_real)) / l[i][3];
+        s1221_r = l[i][3] * s * (1 - s22_r * s22_i);
+        s1221_i = l[i][6] * (1 / s) * (1 - s22_r * s22_i);
+        finale.push_back({s22_r, s22_i, s1221_r, s1221_i});
+    }
+    return finale;
+}
+
 int main() {
     std::vector<std::vector<double> > L = read_from_file("L120.s2p");
     std::vector<std::vector<double> > R = read_from_file("R120.s2p");
+    std::vector<std::vector<double> > T = read_from_file("T30.s2p");
     auto sa = mid_point(L, 8, 1);
     auto sb = mid_point(L, 9, 2);
     auto sa_func = linerSpline(sa);
     auto sb_func = linerSpline(sb);
+    auto lrt = LRT(L, R, T, sa_func, sb_func);
     auto lr = LR(L, R, sa_func, sb_func);
-
-    int cho = 0;
-    std::string filename = "0.txt";
-    std::ofstream outFile(filename);
-    if (!outFile) {
-        return 1;
-    }
-    for (const auto &elem: lr) {
-        outFile << elem[0] << ' ' << elem[1] << ' ' << elem[2] << ' ' << elem[3] << std::endl;
-    }
-    outFile.close();
+    auto expr = express(L, sa_func, sb_func);
+    write_to_file(lrt, "lrt.txt");
+    write_to_file(lr, "lr.txt");
+    write_to_file(expr, "express.txt");
 }
